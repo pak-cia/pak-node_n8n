@@ -25,7 +25,6 @@ function cleanWhitespace(s) {
 function normalize(str) {
   return (str || '')
     .toLowerCase()
-    .replace(/[·•]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -37,7 +36,7 @@ function normalize(str) {
 return $input.all().map(item => {
 
   const j = item.json || {};
-  const html = j.textAsHtml || j.body || '';
+  const html = j.textAsHtml || '';
 
   const cleanedHtml = html
     .replace(/<style[\s\S]*?<\/style>/gi, '')
@@ -52,7 +51,7 @@ return $input.all().map(item => {
   );
 
   // =========================
-  // Extract Fields
+  // Extract Core Fields
   // =========================
 
   // Reservation ID
@@ -60,40 +59,25 @@ return $input.all().map(item => {
   const bookingId = bookingMatch ? bookingMatch[1] : '';
 
   // Property Name
-  const propertyMatch = flatText.match(/New Reservation\s+(.+?)\s+Seminyak|New Reservation\s+(.+?)\s+[A-Za-z]+,/i);
-  let propertyName = '';
+  const propertyMatch = flatText.match(/New Reservation\s+(.+?)\s+[A-Za-z]+,/i);
+  const propertyName = propertyMatch ? propertyMatch[1] : '';
 
-  if (propertyMatch) {
-    propertyName = propertyMatch[1] || propertyMatch[2] || '';
-  }
-
-  // Guest Name
+  // Guest
   let customerFirstName = '';
   let customerLastName = '';
-
   const guestMatch = flatText.match(/Guest:\s*([A-Za-z]+)\s+([A-Za-z]+)/i);
   if (guestMatch) {
     customerFirstName = guestMatch[1];
     customerLastName = guestMatch[2];
   }
 
-  // Check-in / Check-out
-  const checkInMatch = flatText.match(/Check-In\s+([A-Za-z]+\s+\d{1,2},\s+\d{4})/i);
-  const checkOutMatch = flatText.match(/Check-Out\s+([A-Za-z]+\s+\d{1,2},\s+\d{4})/i);
+  // Check-In / Check-Out (from the table row)
+  const dateRowMatch = flatText.match(
+    /Check-In\s+Check-Out[\s\S]*?([A-Za-z]{3}\s+\d{1,2},\s+\d{4})\s+([A-Za-z]{3}\s+\d{1,2},\s+\d{4})/i
+  );
 
-  const checkIn = checkInMatch ? checkInMatch[1] : '';
-  const checkOut = checkOutMatch ? checkOutMatch[1] : '';
-
-  // Room Type Name
-  const roomMatch = flatText.match(/Room Type Name:\s*(.+?)\s+Pricing Model/i);
-  const roomTypeRaw = roomMatch ? cleanWhitespace(roomMatch[1]) : '';
-
-  // Expedia rarely shows quantity explicitly, leave empty
-  let noOfRooms = '';
-  const roomsMatch = flatText.match(/(\d+)\s+Room/i);
-  if (roomsMatch) {
-    noOfRooms = roomsMatch[1];
-  }
+  const checkIn = dateRowMatch ? dateRowMatch[1] : '';
+  const checkOut = dateRowMatch ? dateRowMatch[2] : '';
 
   // =========================
   // Property Mapping
@@ -108,29 +92,31 @@ return $input.all().map(item => {
   const propertyId = propertyMap[normalize(propertyName)] || '';
 
   // =========================
-  // Room Mapping
+  // Room Mapping (via Room Type Code)
   // =========================
 
-  let finalRoomType = roomTypeRaw;
+  let finalRoomType = '';
+  let noOfRooms = '';
 
-  if (propertyId === "POMS") {
-    if (/superior studio/i.test(roomTypeRaw)) {
+  const roomCodeMatch = flatText.match(/Room Type Code:\s*(Poms-[A-Z]+)/i);
+  const roomCode = roomCodeMatch ? roomCodeMatch[1].toUpperCase() : '';
+
+  if (propertyId === "POMS" && roomCode) {
+
+    if (/POMS-AHIP/i.test(roomCode)) {
+      finalRoomType = "Living Room Suite";
+    }
+    else if (/POMS-BG/i.test(roomCode)) {
+      finalRoomType = "Patio Suite with Kitchen";
+    }
+    else if (/POMS-CDEF/i.test(roomCode)) {
+      finalRoomType = "Ground Floor Standard Suite";
+    }
+    else if (/POMS-JO/i.test(roomCode)) {
+      finalRoomType = "Balcony Suite";
+    }
+    else if (/POMS-KLMN/i.test(roomCode)) {
       finalRoomType = "Second Floor Standard Suite";
-    }
-    if (/pool view/i.test(roomTypeRaw)) {
-      finalRoomType = "Pool View Studio";
-    }
-  }
-
-  if (propertyId === "ULU") {
-    if (/1 bedroom/i.test(roomTypeRaw)) {
-      finalRoomType = "1 Bedroom Villa";
-    }
-    if (/2 bedroom/i.test(roomTypeRaw)) {
-      finalRoomType = "2 Bedroom Villa";
-    }
-    if (/3 bedroom/i.test(roomTypeRaw)) {
-      finalRoomType = "3 Bedroom Villa";
     }
   }
 
