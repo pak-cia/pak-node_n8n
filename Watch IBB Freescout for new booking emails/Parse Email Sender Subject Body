@@ -1,0 +1,17 @@
+return $input.all().map(item => {
+  const j = item.json.body;
+
+  const threads = j._embedded?.threads || [];
+
+  // Find the real incoming email thread
+  const emailThread = threads.find(t =>
+    t.type === 'customer' &&
+    t.source?.type === 'email'
+  );
+
+  return {
+    subject: j.subject || '',
+    textAsHtml: emailThread?.body || '',
+    sender: j.createdBy?.email || ''
+  };
+});
