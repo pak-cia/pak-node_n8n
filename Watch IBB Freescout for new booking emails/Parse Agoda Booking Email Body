@@ -1,0 +1,105 @@
+// === Decoder Section ===
+function decodeEntities(str) {
+  if (!str) return '';
+  // basic named entities
+  str = str.replace(/&nbsp;/g,' ')
+           .replace(/&amp;/g,'&')
+           .replace(/&quot;/g,'"')
+           .replace(/&#39;|&apos;/g,"'")
+           .replace(/&lt;/g,'<')
+           .replace(/&gt;/g,'>')
+           .replace(/&rsquo;|&#8217;/g,"’")
+           .replace(/&uuml;/g,'ü')
+           .replace(/&ccedil;/g,'ç')
+           .replace(/&imath;/gi,'ı')
+           .replace(/&Idot;/g,'İ');
+  // numeric entities (decimal and hex)
+  str = str.replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)));
+  str = str.replace(/&#x([0-9a-fA-F]+);/g, (_, n) => String.fromCharCode(parseInt(n, 16)));
+  return str;
+}
+function cleanWhitespace(s) {
+  return (s||'').replace(/\r?\n/g,' ').replace(/\s+/g,' ').trim();
+}
+
+// === Main Parsing ===
+return $input.all().map(item => {
+  const j = item.json || {};
+  const html = j.textAsHtml || j.textHtml || j.body || '';
+
+  // 1) Find <p> containing "Room Type"
+  const pRe = /<p[^>]*>([\s\S]*?)<\/p>/gi;
+  let m;
+  let chosenInner = null;
+  while ((m = pRe.exec(html)) !== null) {
+    const innerHtml = m[1];
+    const asText = cleanWhitespace(decodeEntities(innerHtml.replace(/<br\s*\/?>/gi, ' ')).replace(/<[^>]*>/g,' '));
+    if (/Room\s*Type/i.test(asText)) {
+      chosenInner = innerHtml;
+      break;
+    }
+  }
+
+  const chosenHtml = chosenInner || html;
+  const chosenText = cleanWhitespace(
+    decodeEntities(chosenHtml.replace(/<br\s*\/?>/gi, ' ')).replace(/<[^>]*>/g,' ')
+  );
+
+  // 2) Skip header tokens
+  const headerRegex = /(Room\s*Type|No\.?\s*of\s*Rooms|Occupancy|Children(?:’|&rsquo;|&#8217;|')?s?\s*age|No\.?\s*of\s*Extra\s*Bed)/gi;
+  let lastEnd = 0;
+  let hm;
+  while ((hm = headerRegex.exec(chosenText)) !== null) {
+    lastEnd = hm.index + hm[0].length;
+  }
+  let dataStr = chosenText.slice(lastEnd).trim();
+  if (!dataStr) {
+    const heuristic = chosenText.match(/(Suite|Villa|Deluxe|Room|Balcony|Studio|Apartment)[\s\S]{0,60}/i);
+    dataStr = heuristic ? heuristic[0] : chosenText;
+  }
+
+  // 3) Extract roomType and noOfRooms
+  const tokens = dataStr.split(/\s+/).filter(Boolean);
+  let roomType = '';
+  let noOfRooms = '';
+  const firstNumIndex = tokens.findIndex(t => /^\d+$/.test(t));
+  if (firstNumIndex > 0) {
+    roomType = tokens.slice(0, firstNumIndex).join(' ');
+    noOfRooms = tokens[firstNumIndex];
+  } else if (firstNumIndex === 0) {
+    const alt = chosenText.match(/([A-Za-z0-9\(\)\/\-\&'’\.\, ]{3,}?)\s+(\d+)\b/);
+    if (alt) {
+      roomType = alt[1].trim();
+      noOfRooms = alt[2];
+    }
+  } else {
+    const altAll = [...chosenText.matchAll(/([A-Za-z0-9\(\)\/\-\&'’\.\, ]+?)\s+(\d+)\b/g)];
+    if (altAll.length) {
+      const last = altAll[altAll.length - 1];
+      roomType = last[1].trim();
+      noOfRooms = last[2];
+    }
+  }
+  roomType = cleanWhitespace(decodeEntities(roomType));
+  noOfRooms = cleanWhitespace(noOfRooms);
+
+  // 4) Other fields
+  const flatText = cleanWhitespace(decodeEntities(html.replace(/<br\s*\/?>/gi,' ')).replace(/<[^>]*>/g,' '));
+  const bookingIdMatch = flatText.match(/Booking\s*ID\s*([A-Za-z0-9\-]+)/i);
+  const propertyIdMatch = flatText.match(/Property\s*ID[^0-9]*([0-9]+)/i);
+  const firstNameMatch = flatText.match(/Customer\s*First\s*Name\s+(.+?)(?=\s+Customer\s*Last\s*Name|\s+Country\s+of\s+Residence|\s+Check-?in|$)/i);
+  const lastNameMatch  = flatText.match(/Customer\s*Last\s*Name\s+(.+?)(?=\s+Country\s+of\s+Residence|\s+Check-?in|$)/i);
+  const checkInMatch  = flatText.match(/Check-?in\s+([A-Za-z]+\s+\d{1,2},?\s*\d{4})/i);
+  const checkOutMatch = flatText.match(/Check-?out\s+([A-Za-z]+\s+\d{1,2},?\s*\d{4})/i);
+
+  return {
+    bookingId: bookingIdMatch ? bookingIdMatch[1] : '',
+    propertyId: propertyIdMatch ? propertyIdMatch[1] : '',
+    customerFirstName: firstNameMatch ? cleanWhitespace(decodeEntities(firstNameMatch[1])) : '',
+    customerLastName: lastNameMatch ? cleanWhitespace(decodeEntities(lastNameMatch[1])) : '',
+    checkIn: checkInMatch ? checkInMatch[1] : '',
+    checkOut: checkOutMatch ? checkOutMatch[1] : '',
+    roomType,
+    noOfRooms
+  };
+});
