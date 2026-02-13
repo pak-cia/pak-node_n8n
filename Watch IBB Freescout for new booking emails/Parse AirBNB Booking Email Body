@@ -198,6 +198,51 @@ return $input.all().map(item => {
   }
 
   // =========================
+  // Pom Pom's Room Mapping
+  // =========================
+  
+  if (propertyId === "POMS") {
+  
+    const pomsUnitMap = {
+      "a - big suite w/ private living room": "A",
+      "b - tranquil suite w/ private patio": "B",
+      "c - cozy ground floor queen suite": "C",
+      "d - cozy ground floor queen suite": "D",
+      "e - cozy ground floor queen suite": "E",
+      "f - cozy ground floor queen suite": "F",
+      "g - tranquil suite w/ private patio": "G",
+      "h - big suite w/ private living room": "H",
+      "i - big suite w/ private living room": "I",
+      "j - tranquil suite w/ private balcony": "J",
+      "k - cozy second floor queen suite": "K",
+      "l - cozy second floor queen suite": "L",
+      "m - cozy second floor queen suite": "M",
+      "n - cozy second floor queen suite": "N",
+      "o - tranquil suite w/ private balcony": "O",
+      "p - big suite w/ private living room": "P"
+    };
+  
+    const unitLetter = pomsUnitMap[normalizedRoom] || "";
+  
+    if (["A", "H", "I", "P"].includes(unitLetter)) {
+      finalRoomType = "Living Room Suite";
+    } 
+    else if (["B", "G"].includes(unitLetter)) {
+      finalRoomType = "Patio Suite with Kitchen";
+    } 
+    else if (["C", "D", "E", "F"].includes(unitLetter)) {
+      finalRoomType = "Ground Floor Standard Suite";
+    } 
+    else if (["J", "O"].includes(unitLetter)) {
+      finalRoomType = "Balcony Suite";
+    } 
+    else if (["K", "L", "M", "N"].includes(unitLetter)) {
+      finalRoomType = "Second Floor Standard Suite";
+    }
+  }
+
+
+  // =========================
   // Final Output
   // =========================
 
