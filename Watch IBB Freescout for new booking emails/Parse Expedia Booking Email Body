@@ -1,0 +1,153 @@
+// =========================
+// Helpers
+// =========================
+
+function decodeEntities(str) {
+  if (!str) return '';
+  return str
+    .replace(/&nbsp;/g,' ')
+    .replace(/&amp;/g,'&')
+    .replace(/&quot;/g,'"')
+    .replace(/&#39;|&apos;/g,"'")
+    .replace(/&lt;/g,'<')
+    .replace(/&gt;/g,'>')
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, n) => String.fromCharCode(parseInt(n, 16)));
+}
+
+function cleanWhitespace(s) {
+  return (s || '')
+    .replace(/\r?\n/g,' ')
+    .replace(/\s+/g,' ')
+    .trim();
+}
+
+function normalize(str) {
+  return (str || '')
+    .toLowerCase()
+    .replace(/[·•]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// =========================
+// Main Parser
+// =========================
+
+return $input.all().map(item => {
+
+  const j = item.json || {};
+  const html = j.textAsHtml || j.body || '';
+
+  const cleanedHtml = html
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<script[\s\S]*?<\/script>/gi, '');
+
+  const flatText = cleanWhitespace(
+    decodeEntities(
+      cleanedHtml
+        .replace(/<br\s*\/?>/gi, ' ')
+        .replace(/<[^>]*>/g, ' ')
+    )
+  );
+
+  // =========================
+  // Extract Fields
+  // =========================
+
+  // Reservation ID
+  const bookingMatch = flatText.match(/Reservation ID:\s*(\d+)/i);
+  const bookingId = bookingMatch ? bookingMatch[1] : '';
+
+  // Property Name
+  const propertyMatch = flatText.match(/New Reservation\s+(.+?)\s+Seminyak|New Reservation\s+(.+?)\s+[A-Za-z]+,/i);
+  let propertyName = '';
+
+  if (propertyMatch) {
+    propertyName = propertyMatch[1] || propertyMatch[2] || '';
+  }
+
+  // Guest Name
+  let customerFirstName = '';
+  let customerLastName = '';
+
+  const guestMatch = flatText.match(/Guest:\s*([A-Za-z]+)\s+([A-Za-z]+)/i);
+  if (guestMatch) {
+    customerFirstName = guestMatch[1];
+    customerLastName = guestMatch[2];
+  }
+
+  // Check-in / Check-out
+  const checkInMatch = flatText.match(/Check-In\s+([A-Za-z]+\s+\d{1,2},\s+\d{4})/i);
+  const checkOutMatch = flatText.match(/Check-Out\s+([A-Za-z]+\s+\d{1,2},\s+\d{4})/i);
+
+  const checkIn = checkInMatch ? checkInMatch[1] : '';
+  const checkOut = checkOutMatch ? checkOutMatch[1] : '';
+
+  // Room Type Name
+  const roomMatch = flatText.match(/Room Type Name:\s*(.+?)\s+Pricing Model/i);
+  const roomTypeRaw = roomMatch ? cleanWhitespace(roomMatch[1]) : '';
+
+  // Expedia rarely shows quantity explicitly, leave empty
+  let noOfRooms = '';
+  const roomsMatch = flatText.match(/(\d+)\s+Room/i);
+  if (roomsMatch) {
+    noOfRooms = roomsMatch[1];
+  }
+
+  // =========================
+  // Property Mapping
+  // =========================
+
+  const propertyMap = {
+    "pom pom's bali apartments": "POMS",
+    "middle house bali": "MH",
+    "the ulu hills": "ULU"
+  };
+
+  const propertyId = propertyMap[normalize(propertyName)] || '';
+
+  // =========================
+  // Room Mapping
+  // =========================
+
+  let finalRoomType = roomTypeRaw;
+
+  if (propertyId === "POMS") {
+    if (/superior studio/i.test(roomTypeRaw)) {
+      finalRoomType = "Second Floor Standard Suite";
+    }
+    if (/pool view/i.test(roomTypeRaw)) {
+      finalRoomType = "Pool View Studio";
+    }
+  }
+
+  if (propertyId === "ULU") {
+    if (/1 bedroom/i.test(roomTypeRaw)) {
+      finalRoomType = "1 Bedroom Villa";
+    }
+    if (/2 bedroom/i.test(roomTypeRaw)) {
+      finalRoomType = "2 Bedroom Villa";
+    }
+    if (/3 bedroom/i.test(roomTypeRaw)) {
+      finalRoomType = "3 Bedroom Villa";
+    }
+  }
+
+  // =========================
+  // Final Output
+  // =========================
+
+  return {
+    bookingId,
+    propertyId,
+    customerFirstName,
+    customerLastName,
+    checkIn,
+    checkOut,
+    roomType: finalRoomType,
+    noOfRooms,
+    channel: "expedia"
+  };
+
+});
