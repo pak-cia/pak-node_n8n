@@ -1,0 +1,113 @@
+// =========================
+// Helpers
+// =========================
+function detectChannel(senderRaw) {
+  const sender = (senderRaw || '').toLowerCase().trim();
+
+  if (sender.includes('noreply@booking.com')) return 'bookcom';
+  return 'unknown';
+}
+
+function decodeEntities(str) {
+  if (!str) return '';
+  return str
+    .replace(/&nbsp;/g,' ')
+    .replace(/&amp;/g,'&')
+    .replace(/&quot;/g,'"')
+    .replace(/&#39;|&apos;/g,"'")
+    .replace(/&lt;/g,'<')
+    .replace(/&gt;/g,'>')
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, n) => String.fromCharCode(parseInt(n, 16)));
+}
+
+function cleanWhitespace(s) {
+  return (s || '')
+    .replace(/\r?\n/g,' ')
+    .replace(/\s+/g,' ')
+    .trim();
+}
+
+// =========================
+// Main Parser
+// =========================
+
+return $input.all().map(item => {
+
+  const j = item.json || {};
+  const channel = detectChannel(j.sender);
+  const html = j.textAsHtml || j.body || '';
+
+  // Remove style/script blocks
+  let cleanedHtml = html
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<script[\s\S]*?<\/script>/gi, '');
+
+  const flatText = cleanWhitespace(
+    decodeEntities(
+      cleanedHtml
+        .replace(/<br\s*\/?>/gi, ' ')
+        .replace(/<[^>]*>/g, ' ')
+    )
+  );
+
+  // =========================
+  // Initialize Output Fields
+  // =========================
+  let bookingId = '';
+  let propertyId = '';
+  let customerFirstName = '';
+  let customerLastName = '';
+  let checkIn = '';
+  let checkOut = '';
+  let roomType = '';
+  let noOfRooms = "";
+
+  // Try to extract number of rooms if present
+  const roomsMatch = flatText.match(/(\d+)\s+room/i);
+  if (roomsMatch) {
+    noOfRooms = roomsMatch[1];
+  }
+
+  // =========================
+  // Booking.com Extraction
+  // =========================
+
+  // Booking ID
+  const bookingMatch = flatText.match(/Booking confirmation\s*[—-]\s*(\d+)/i);
+  if (bookingMatch) {
+    bookingId = bookingMatch[1];
+  }
+
+  // Property name → propertyId mapping
+  const propertyMatch = flatText.match(/(Pom Pom's Bali Apartments|Middle House Bali|The Ulu Hills)/i);
+  if (propertyMatch) {
+
+    const propertyName = propertyMatch[1].toLowerCase();
+
+    const propertyNameMap = {
+      "pom pom's bali apartments": "POMS",
+      "middle house bali": "MH",
+      "the ulu hills": "ULU"
+    };
+
+    propertyId = propertyNameMap[propertyName] || '';
+  }
+
+  // =========================
+  // Final Output
+  // =========================
+
+  return {
+    bookingId,
+    propertyId,
+    customerFirstName,
+    customerLastName,
+    checkIn,
+    checkOut,
+    roomType,
+    noOfRooms,
+    channel
+  };
+
+});
