@@ -1,6 +1,30 @@
 // =========================
 // Helpers
 // =========================
+
+// Currency Aware Money Extractor
+function extractMoney(line) {
+  const match = line.match(/(Rp|\$|USD)\s?([\d,]+\.\d{2})/i);
+  if (!match) return null;
+
+  const currencyRaw = match[1].toUpperCase();
+  const amountRaw = match[2];
+
+  let currency = '';
+  if (currencyRaw === 'RP') currency = 'IDR';
+  if (currencyRaw === '$' || currencyRaw === 'USD') currency = 'USD';
+
+  const numeric = parseFloat(amountRaw.replace(/,/g, ''));
+
+  return {
+    currency,
+    numeric,
+    formatted: amountRaw.split('.')[0] + ' ' + currency
+  };
+}
+
+
+// OTA Channel Detector
 function detectChannel(senderRaw) {
   const sender = (senderRaw || '').toLowerCase().trim();
 
@@ -334,7 +358,11 @@ return $input.all().map(item => {
     checkOut,
     roomType: finalRoomType,
     noOfRooms,
-    channel
+    channel,
+    nightlyRate,
+    totalPayment,
+    taxes,
+    otaFees
   };
 
 });
