@@ -80,6 +80,52 @@ return $input.all().map(item => {
   const checkOut = dateRowMatch ? dateRowMatch[2] : '';
 
   // =========================
+  // Pricing Extraction
+  // =========================
+  
+  let nightlyRate = '';
+  let totalPayment = '';
+  let otaFees = '';
+  let taxes = '';
+  let amountToCharge = '';
+  
+  // Nightly Rate
+  const nightlyMatch = flatText.match(/Daily Base Rate\s*-\s*([\d,]+\s*IDR)/i);
+  if (nightlyMatch) {
+    nightlyRate = nightlyMatch[1];
+  }
+  
+  // Total Booking Amount
+  const totalMatch = flatText.match(/Total Booking Amount:\s*([\d,]+\s*IDR)/i);
+  if (totalMatch) {
+    totalPayment = totalMatch[1];
+  }
+  
+  // Taxes
+  const taxMatch = flatText.match(/Taxes:\s*([\d,]+\s*IDR)/i);
+  if (taxMatch) {
+    taxes = taxMatch[1];
+  }
+  
+  // Amount to Charge Expedia
+  const chargeMatch = flatText.match(/Amount to Charge Expedia Group:\s*([\d,]+\s*IDR)/i);
+  if (chargeMatch) {
+    amountToCharge = chargeMatch[1];
+  }
+  
+  // Calculate OTA Fees correctly
+  if (totalMatch && taxMatch && chargeMatch) {
+    const totalNum = parseInt(totalMatch[1].replace(/[^\d]/g, ''), 10);
+    const taxNum = parseInt(taxMatch[1].replace(/[^\d]/g, ''), 10);
+    const chargeNum = parseInt(chargeMatch[1].replace(/[^\d]/g, ''), 10);
+  
+    if (!isNaN(totalNum) && !isNaN(taxNum) && !isNaN(chargeNum)) {
+      const fee = totalNum - taxNum - chargeNum;
+      otaFees = fee.toLocaleString() + ' IDR';
+    }
+  }
+
+  // =========================
   // Property Mapping
   // =========================
 
@@ -133,7 +179,11 @@ return $input.all().map(item => {
     checkOut,
     roomType: finalRoomType,
     noOfRooms,
-    channel: "expedia"
+    channel: "expedia",
+    nightlyRate,
+    totalPayment,
+    taxes,
+    otaFees
   };
 
 });
