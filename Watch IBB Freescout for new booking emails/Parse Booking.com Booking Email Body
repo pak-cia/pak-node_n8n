@@ -107,7 +107,11 @@ return $input.all().map(item => {
     checkOut,
     roomType,
     noOfRooms,
-    channel
+    channel: "bookcom",
+    nightlyRate,
+    totalPayment,
+    taxes,
+    otaFees
   };
 
 });
