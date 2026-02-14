@@ -1,105 +1,210 @@
-// === Decoder Section ===
+// =========================
+// Helpers
+// =========================
+
 function decodeEntities(str) {
   if (!str) return '';
-  // basic named entities
-  str = str.replace(/&nbsp;/g,' ')
-           .replace(/&amp;/g,'&')
-           .replace(/&quot;/g,'"')
-           .replace(/&#39;|&apos;/g,"'")
-           .replace(/&lt;/g,'<')
-           .replace(/&gt;/g,'>')
-           .replace(/&rsquo;|&#8217;/g,"’")
-           .replace(/&uuml;/g,'ü')
-           .replace(/&ccedil;/g,'ç')
-           .replace(/&imath;/gi,'ı')
-           .replace(/&Idot;/g,'İ');
-  // numeric entities (decimal and hex)
-  str = str.replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)));
-  str = str.replace(/&#x([0-9a-fA-F]+);/g, (_, n) => String.fromCharCode(parseInt(n, 16)));
-  return str;
+  return str
+    .replace(/&nbsp;/g,' ')
+    .replace(/&amp;/g,'&')
+    .replace(/&quot;/g,'"')
+    .replace(/&#39;|&apos;/g,"'")
+    .replace(/&lt;/g,'<')
+    .replace(/&gt;/g,'>')
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, n) => String.fromCharCode(parseInt(n, 16)));
 }
+
 function cleanWhitespace(s) {
-  return (s||'').replace(/\r?\n/g,' ').replace(/\s+/g,' ').trim();
+  return (s || '').replace(/\r?\n/g,' ').replace(/\s+/g,' ').trim();
 }
 
-// === Main Parsing ===
+function extractMoney(text) {
+  const match = text.match(/(IDR|USD|\$)\s?(-?[\d,]+\.\d{2})/i);
+  if (!match) return null;
+
+  const currency = match[1] === '$' ? 'USD' : match[1].toUpperCase();
+  const numeric = parseFloat(match[2].replace(/,/g,''));
+  const formatted = match[2].split('.')[0] + ' ' + currency;
+
+  return { currency, numeric, formatted };
+}
+
+// =========================
+// Main Parser
+// =========================
+
 return $input.all().map(item => {
+
   const j = item.json || {};
-  const html = j.textAsHtml || j.textHtml || j.body || '';
+  const html = j.textAsHtml || j.body || '';
 
-  // 1) Find <p> containing "Room Type"
-  const pRe = /<p[^>]*>([\s\S]*?)<\/p>/gi;
-  let m;
-  let chosenInner = null;
-  while ((m = pRe.exec(html)) !== null) {
-    const innerHtml = m[1];
-    const asText = cleanWhitespace(decodeEntities(innerHtml.replace(/<br\s*\/?>/gi, ' ')).replace(/<[^>]*>/g,' '));
-    if (/Room\s*Type/i.test(asText)) {
-      chosenInner = innerHtml;
-      break;
-    }
-  }
-
-  const chosenHtml = chosenInner || html;
-  const chosenText = cleanWhitespace(
-    decodeEntities(chosenHtml.replace(/<br\s*\/?>/gi, ' ')).replace(/<[^>]*>/g,' ')
+  const flatText = cleanWhitespace(
+    decodeEntities(html.replace(/<br\s*\/?>/gi,' ').replace(/<[^>]*>/g,' '))
   );
 
-  // 2) Skip header tokens
-  const headerRegex = /(Room\s*Type|No\.?\s*of\s*Rooms|Occupancy|Children(?:’|&rsquo;|&#8217;|')?s?\s*age|No\.?\s*of\s*Extra\s*Bed)/gi;
-  let lastEnd = 0;
-  let hm;
-  while ((hm = headerRegex.exec(chosenText)) !== null) {
-    lastEnd = hm.index + hm[0].length;
+  const channel = "agoda";
+
+  // =========================
+  // Booking ID
+  // =========================
+  const bookingMatch = flatText.match(/Booking\s*ID\s*([0-9]+)/i);
+  const bookingId = bookingMatch ? bookingMatch[1] : '';
+
+  // =========================
+  // Guest Name
+  // =========================
+  const firstNameMatch = html.match(/id="ltrCustomerFirstNameValue"[^>]*>([^<]+)/i);
+  const lastNameMatch  = html.match(/id="ltrCustomerLastNameValue"[^>]*>([^<]+)/i);
+  
+  const customerFirstName = firstNameMatch ? cleanWhitespace(decodeEntities(firstNameMatch[1])) : '';
+  const customerLastName  = lastNameMatch  ? cleanWhitespace(decodeEntities(lastNameMatch[1]))  : '';
+
+  // =========================
+  // Dates
+  // =========================
+  const checkInMatch  = flatText.match(/Check-?in\s+([A-Za-z]+\s+\d{1,2},\s*\d{4})/i);
+  const checkOutMatch = flatText.match(/Check-?out\s+([A-Za-z]+\s+\d{1,2},\s*\d{4})/i);
+
+  const checkIn  = checkInMatch  ? checkInMatch[1]  : '';
+  const checkOut = checkOutMatch ? checkOutMatch[1] : '';
+
+  // =========================
+  // Nights Calculation
+  // =========================
+  
+  let noOfNights = '';
+  
+  if (checkIn && checkOut) {
+    const inDate = new Date(checkIn);
+    const outDate = new Date(checkOut);
+    const diff = (outDate - inDate) / (1000 * 60 * 60 * 24);
+    noOfNights = diff > 0 ? diff.toString() : '';
   }
-  let dataStr = chosenText.slice(lastEnd).trim();
-  if (!dataStr) {
-    const heuristic = chosenText.match(/(Suite|Villa|Deluxe|Room|Balcony|Studio|Apartment)[\s\S]{0,60}/i);
-    dataStr = heuristic ? heuristic[0] : chosenText;
+  
+  // =========================
+  // Room Type + Units
+  // =========================
+
+  const roomMatch = flatText.match(/Room\s*Type\s+(.+?)\s+\d+\s+Adults/i);
+  let rawRoom = roomMatch ? cleanWhitespace(roomMatch[1]) : '';
+
+  const roomsMatch = flatText.match(/No\.?\s*of\s*Rooms\s+(\d+)/i);
+  const noOfRooms = roomsMatch ? roomsMatch[1] : '1';
+
+  // Extract unit code inside brackets (Pom-JO etc)
+  const unitCodeMatch = rawRoom.match(/\(([^)]+)\)/);
+  const unitCode = unitCodeMatch ? unitCodeMatch[1] : '';
+
+  // =========================
+  // Property Mapping
+  // =========================
+
+  let propertyId = '';
+
+  if (/Pom Pom/i.test(flatText)) propertyId = "POMS";
+  if (/Middle House/i.test(flatText)) propertyId = "MH";
+  if (/Ulu Hills/i.test(flatText)) propertyId = "ULU";
+
+  // =========================
+  // Room Mapping
+  // =========================
+
+  let roomType = rawRoom;
+
+  if (propertyId === "POMS" && unitCode) {
+
+    if (/AHIP/i.test(unitCode)) roomType = "Living Room Suite";
+    else if (/BG/i.test(unitCode)) roomType = "Patio Suite with Kitchen";
+    else if (/CDEF/i.test(unitCode)) roomType = "Ground Floor Standard Suite";
+    else if (/JO/i.test(unitCode)) roomType = "Balcony Suite";
+    else if (/KLMN/i.test(unitCode)) roomType = "Second Floor Standard Suite";
   }
 
-  // 3) Extract roomType and noOfRooms
-  const tokens = dataStr.split(/\s+/).filter(Boolean);
-  let roomType = '';
-  let noOfRooms = '';
-  const firstNumIndex = tokens.findIndex(t => /^\d+$/.test(t));
-  if (firstNumIndex > 0) {
-    roomType = tokens.slice(0, firstNumIndex).join(' ');
-    noOfRooms = tokens[firstNumIndex];
-  } else if (firstNumIndex === 0) {
-    const alt = chosenText.match(/([A-Za-z0-9\(\)\/\-\&'’\.\, ]{3,}?)\s+(\d+)\b/);
-    if (alt) {
-      roomType = alt[1].trim();
-      noOfRooms = alt[2];
-    }
-  } else {
-    const altAll = [...chosenText.matchAll(/([A-Za-z0-9\(\)\/\-\&'’\.\, ]+?)\s+(\d+)\b/g)];
-    if (altAll.length) {
-      const last = altAll[altAll.length - 1];
-      roomType = last[1].trim();
-      noOfRooms = last[2];
+  // =========================
+  // Pricing
+  // =========================
+
+// =========================
+// Pricing (Agoda Corrected)
+// =========================
+  let currency = '';
+  let nightlyRate = '';
+  let nightlyRateValue = 0;
+  let totalPayment = '';
+  let totalPaymentValue = 0;
+  let otaFees = '';
+  let otaFeesValue = 0;
+  let taxes = '';
+  let payout = '';
+  let payoutValue = 0;
+  
+  // ---- Reference Sell Rate (this is what guest paid)
+  const sellRateMatch = flatText.match(/Reference sell rate.*?(IDR|USD|\$)\s?([\d,]+\.\d{2})/i);
+  
+  if (sellRateMatch) {
+    const money = extractMoney(sellRateMatch[0]);
+    if (money) {
+      currency = money.currency;
+      totalPaymentValue = money.numeric;
+      totalPayment = money.formatted;
+      payoutValue = money.numeric;
+      payout = money.formatted;
     }
   }
-  roomType = cleanWhitespace(decodeEntities(roomType));
-  noOfRooms = cleanWhitespace(noOfRooms);
+  
+  // ---- Commission (Agoda OTA fee)
+  const commissionMatch = flatText.match(/Commission\s+(IDR|USD|\$)\s?-?([\d,]+\.\d{2})/i);
+  
+  if (commissionMatch) {
+    const money = extractMoney(commissionMatch[0]);
+    if (money) {
+      otaFeesValue = Math.abs(money.numeric);
+      otaFees = otaFeesValue.toLocaleString('en-US') + ' ' + money.currency;
+    }
+  }
+  
+  // ---- Tax on Commission
+  const taxMatch = flatText.match(/Tax on Commission.*?(IDR|USD|\$)\s?-?([\d,]+\.\d{2})/i);
+  if (taxMatch) {
+    const money = extractMoney(taxMatch[0]);
+    if (money) {
+      taxes = Math.abs(money.numeric).toLocaleString('en-US') + ' ' + money.currency;
+    }
+  }
 
-  // 4) Other fields
-  const flatText = cleanWhitespace(decodeEntities(html.replace(/<br\s*\/?>/gi,' ')).replace(/<[^>]*>/g,' '));
-  const bookingIdMatch = flatText.match(/Booking\s*ID\s*([A-Za-z0-9\-]+)/i);
-  const propertyIdMatch = flatText.match(/Property\s*ID[^0-9]*([0-9]+)/i);
-  const firstNameMatch = flatText.match(/Customer\s*First\s*Name\s+(.+?)(?=\s+Customer\s*Last\s*Name|\s+Country\s+of\s+Residence|\s+Check-?in|$)/i);
-  const lastNameMatch  = flatText.match(/Customer\s*Last\s*Name\s+(.+?)(?=\s+Country\s+of\s+Residence|\s+Check-?in|$)/i);
-  const checkInMatch  = flatText.match(/Check-?in\s+([A-Za-z]+\s+\d{1,2},?\s*\d{4})/i);
-  const checkOutMatch = flatText.match(/Check-?out\s+([A-Za-z]+\s+\d{1,2},?\s*\d{4})/i);
+  // ---- Calculate nightly rate from total
+  if (totalPaymentValue && noOfNights) {
+    nightlyRateValue = totalPaymentValue / parseInt(noOfNights);
+    nightlyRate = nightlyRateValue.toLocaleString('en-US') + ' ' + currency;
+  }
+
+
+  // =========================
+  // Final Output
+  // =========================
 
   return {
-    bookingId: bookingIdMatch ? bookingIdMatch[1] : '',
-    propertyId: propertyIdMatch ? propertyIdMatch[1] : '',
-    customerFirstName: firstNameMatch ? cleanWhitespace(decodeEntities(firstNameMatch[1])) : '',
-    customerLastName: lastNameMatch ? cleanWhitespace(decodeEntities(lastNameMatch[1])) : '',
-    checkIn: checkInMatch ? checkInMatch[1] : '',
-    checkOut: checkOutMatch ? checkOutMatch[1] : '',
+    bookingId,
+    propertyId,
+    customerFirstName,
+    customerLastName,
+    checkIn,
+    checkOut,
+    noOfNights,
     roomType,
-    noOfRooms
+    noOfRooms,
+    channel,
+    currency,
+    nightlyRate,
+    nightlyRateValue,
+    totalPayment,
+    totalPaymentValue,
+    taxes,
+    otaFees,
+    otaFeesValue,
+    payout,
+    payoutValue
   };
+
 });
