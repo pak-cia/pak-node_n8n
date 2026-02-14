@@ -147,14 +147,46 @@ return $input.all().map(item => {
     }
   }
 
-
-  // Check-in
-  const checkInMatch = flatText.match(/Check-in\s+(?:[A-Za-z]+,\s+)?([A-Za-z]+\s+\d{1,2})/i);
-  const checkIn = checkInMatch ? checkInMatch[1] : '';
-
-  // Checkout
-  const checkOutMatch = flatText.match(/Checkout\s+(?:[A-Za-z]+,\s+)?([A-Za-z]+\s+\d{1,2})/i);
-  const checkOut = checkOutMatch ? checkOutMatch[1] : '';
+  // =========================
+  // Check-in / Check-out with Smart Year Logic
+  // =========================
+  
+  const checkInMatch = flatText.match(/Check-?in\s+(?:[A-Za-z]+,\s+)?([A-Za-z]+\s+\d{1,2})/i);
+  const checkOutMatch = flatText.match(/Check-?out\s+(?:[A-Za-z]+,\s+)?([A-Za-z]+\s+\d{1,2})/i);
+  
+  let checkIn = '';
+  let checkOut = '';
+  
+  if (checkInMatch && checkOutMatch) {
+  
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // remove time component
+  
+    const currentYear = today.getFullYear();
+  
+    let checkInDate = new Date(`${checkInMatch[1]} ${currentYear}`);
+    let checkOutDate = new Date(`${checkOutMatch[1]} ${currentYear}`);
+  
+    // If checkout is before or equal checkin → must be next year
+    if (checkOutDate <= checkInDate) {
+      checkOutDate.setFullYear(currentYear + 1);
+    }
+  
+    // If check-in is more than 1 day in the past → assume next year
+    const yesterday = new Date(today);
+    yesterday.setDate(today.getDate() - 1);
+  
+    if (checkInDate < yesterday) {
+      checkInDate.setFullYear(currentYear + 1);
+      checkOutDate.setFullYear(checkInDate.getFullYear());
+    }
+  
+    const formatDate = (d) =>
+      d.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  
+    checkIn = formatDate(checkInDate);
+    checkOut = formatDate(checkOutDate);
+  }
 
   // =========================
   // Room Title Extraction
