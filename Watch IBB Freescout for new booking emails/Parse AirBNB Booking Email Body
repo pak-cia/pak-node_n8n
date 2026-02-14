@@ -185,6 +185,46 @@ return $input.all().map(item => {
   const noOfRooms = "1";
 
   // =========================
+  // Airbnb Pricing Extraction
+  // =========================
+  
+  let nightlyRate = '';
+  let totalPayment = '';
+  let otaFees = '';
+  let taxes = ''; // Airbnb does not separate taxes in this format
+  let payout = '';
+  
+  // Nightly Rate (Rp262,500.00 x 2 nights)
+  const nightlyMatch = flatText.match(/Rp([\d,]+\.\d{2})\s*x\s*\d+\s*nights/i);
+  if (nightlyMatch) {
+    nightlyRate = nightlyMatch[1].split('.')[0] + ' IDR';
+  }
+  
+  // Total Guest Payment (first large total before Host payout)
+  const totalMatch = flatText.match(/Rp([\d,]+\.\d{2})\s*\n?\s*Guest service fee/i);
+  if (!totalMatch) {
+    // fallback: match the bold Total (IDR)
+    const totalAlt = flatText.match(/Total\s*\(IDR\)[^\d]*Rp([\d,]+\.\d{2})/i);
+    if (totalAlt) {
+      totalPayment = totalAlt[1].split('.')[0] + ' IDR';
+    }
+  } else {
+    totalPayment = totalMatch[1].split('.')[0] + ' IDR';
+  }
+  
+  // Host service fee (OTA fee)
+  const feeMatch = flatText.match(/Host service fee.*?-Rp([\d,]+\.\d{2})/i);
+  if (feeMatch) {
+    otaFees = feeMatch[1].split('.')[0] + ' IDR';
+  }
+  
+  // Payout (optional but useful)
+  const payoutMatch = flatText.match(/You earn[^\d]*Rp([\d,]+\.\d{2})/i);
+  if (payoutMatch) {
+    payout = payoutMatch[1].split('.')[0] + ' IDR';
+  }
+  
+  // =========================
   // Property Mapping
   // =========================
   
