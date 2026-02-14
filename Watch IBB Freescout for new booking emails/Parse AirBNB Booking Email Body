@@ -215,16 +215,26 @@ return $input.all().map(item => {
   }
 
   
-  // Total Guest Payment (first large total before Host payout) 
-  const totalMatch = flatText.match(/Total\s*\([A-Z]+\)[^\d]*(Rp|\$|USD)\s?([\d,]+\.\d{2})/i);
-  if (totalMatch) {
-    const money = extractMoney(totalMatch[0]);
-    if (money) {
-      totalPayment = money.formatted;
-      totalPaymentValue = money.numeric;
-      currency = money.currency;
-    }
+  // Room subtotal (right side of nightly rate line)
+  const subtotalMatch = flatText.match(
+    /(Rp|\$|USD)\s?[\d,]+\.\d{2}\s*x\s*\d+\s*nights\s+(Rp|\$|USD)\s?([\d,]+\.\d{2})/i
+  );
+  
+  if (subtotalMatch) {
+    const currencySymbol = subtotalMatch[2];
+    const amountRaw = subtotalMatch[3];
+  
+    const numeric = parseFloat(amountRaw.replace(/,/g, ''));
+  
+    let currencyDetected = '';
+    if (currencySymbol.toUpperCase() === 'RP') currencyDetected = 'IDR';
+    if (currencySymbol === '$' || currencySymbol.toUpperCase() === 'USD') currencyDetected = 'USD';
+  
+    totalPayment = amountRaw.split('.')[0] + ' ' + currencyDetected;
+    totalPaymentValue = numeric;
+    currency = currencyDetected;
   }
+
   
   // Host service fee (OTA fee)  
   const feeMatch = flatText.match(/Host service fee.*?(Rp|\$|USD)\s?-?([\d,]+\.\d{2})/i);
