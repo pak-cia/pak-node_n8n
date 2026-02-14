@@ -267,22 +267,22 @@ return $input.all().map(item => {
   
   const roomPropertyMap = {
     // ===== Pom Pom's Bali =====
-    "a - big suite w/ private living room": "POMS",
+    "a - big suite": "POMS",
     "b - tranquil suite w/ private patio": "POMS",
     "c - cozy ground floor queen suite": "POMS",
     "d - cozy ground floor queen suite": "POMS",
     "e - cozy ground floor queen suite": "POMS",
     "f - cozy ground floor queen suite": "POMS",
     "g - tranquil suite w/ private patio": "POMS",
-    "h - big suite w/ private living room": "POMS",
-    "i - big suite w/ private living room": "POMS",
+    "h - big suite": "POMS",
+    "i - big suite": "POMS",
     "j - tranquil suite w/ private balcony": "POMS",
     "k - cozy second floor queen suite": "POMS",
     "l - cozy second floor queen suite": "POMS",
     "m - cozy second floor queen suite": "POMS",
     "n - cozy second floor queen suite": "POMS",
     "o - tranquil suite w/ private balcony": "POMS",
-    "p - big suite w/ private living room": "POMS",
+    "p - big suite": "POMS",
   
     // ===== Middle House Bali =====
     "bali beach hideaway w pool steps to sand & surf": "MH",
@@ -343,22 +343,22 @@ return $input.all().map(item => {
   if (propertyId === "POMS") {
   
     const pomsUnitMap = {
-      "a - big suite w/ private living room": "A",
+      "a - big suite": "A",
       "b - tranquil suite w/ private patio": "B",
       "c - cozy ground floor queen suite": "C",
       "d - cozy ground floor queen suite": "D",
       "e - cozy ground floor queen suite": "E",
       "f - cozy ground floor queen suite": "F",
       "g - tranquil suite w/ private patio": "G",
-      "h - big suite w/ private living room": "H",
-      "i - big suite w/ private living room": "I",
+      "h - big suite": "H",
+      "i - big suite": "I",
       "j - tranquil suite w/ private balcony": "J",
       "k - cozy second floor queen suite": "K",
       "l - cozy second floor queen suite": "L",
       "m - cozy second floor queen suite": "M",
       "n - cozy second floor queen suite": "N",
       "o - tranquil suite w/ private balcony": "O",
-      "p - big suite w/ private living room": "P"
+      "p - big suite": "P"
     };
   
     const unitLetter = pomsUnitMap[normalizedRoom] || "";
