@@ -189,39 +189,61 @@ return $input.all().map(item => {
   // =========================
   
   let nightlyRate = '';
+  let nightlyRateValue = 0;
+  
   let totalPayment = '';
+  let totalPaymentValue = 0;
+  
   let otaFees = '';
-  let taxes = ''; // Airbnb does not separate taxes in this format
+  let otaFeesValue = 0;
+  
   let payout = '';
+  let payoutValue = 0;
+  
+  let taxes = ''; // Airbnb does not separate taxes currently
+  let currency = '';
   
   // Nightly Rate (Rp262,500.00 x 2 nights)
-  const nightlyMatch = flatText.match(/Rp([\d,]+\.\d{2})\s*x\s*\d+\s*nights/i);
-  if (nightlyMatch) {
-    nightlyRate = nightlyMatch[1].split('.')[0] + ' IDR';
-  }
-  
-  // Total Guest Payment (first large total before Host payout)
-  const totalMatch = flatText.match(/Rp([\d,]+\.\d{2})\s*\n?\s*Guest service fee/i);
-  if (!totalMatch) {
-    // fallback: match the bold Total (IDR)
-    const totalAlt = flatText.match(/Total\s*\(IDR\)[^\d]*Rp([\d,]+\.\d{2})/i);
-    if (totalAlt) {
-      totalPayment = totalAlt[1].split('.')[0] + ' IDR';
+  const nightlyLineMatch = flatText.match(/(Rp|\$|USD)\s?[\d,]+\.\d{2}\s*x\s*\d+\s*nights/i);
+  if (nightlyLineMatch) {
+    const money = extractMoney(nightlyLineMatch[0]);
+    if (money) {
+      nightlyRate = money.formatted;
+      nightlyRateValue = money.numeric;
+      currency = money.currency;
     }
-  } else {
-    totalPayment = totalMatch[1].split('.')[0] + ' IDR';
+  }
+
+  
+  // Total Guest Payment (first large total before Host payout) 
+  const totalMatch = flatText.match(/Total\s*\([A-Z]+\)[^\d]*(Rp|\$|USD)\s?([\d,]+\.\d{2})/i);
+  if (totalMatch) {
+    const money = extractMoney(totalMatch[0]);
+    if (money) {
+      totalPayment = money.formatted;
+      totalPaymentValue = money.numeric;
+      currency = money.currency;
+    }
   }
   
-  // Host service fee (OTA fee)
-  const feeMatch = flatText.match(/Host service fee.*?-Rp([\d,]+\.\d{2})/i);
+  // Host service fee (OTA fee)  
+  const feeMatch = flatText.match(/Host service fee.*?(Rp|\$|USD)\s?-?([\d,]+\.\d{2})/i);
   if (feeMatch) {
-    otaFees = feeMatch[1].split('.')[0] + ' IDR';
+    const money = extractMoney(feeMatch[0]);
+    if (money) {
+      otaFees = money.formatted;
+      otaFeesValue = money.numeric;
+    }
   }
   
   // Payout (optional but useful)
-  const payoutMatch = flatText.match(/You earn[^\d]*Rp([\d,]+\.\d{2})/i);
+  const payoutMatch = flatText.match(/You earn[^\d]*(Rp|\$|USD)\s?([\d,]+\.\d{2})/i);
   if (payoutMatch) {
-    payout = payoutMatch[1].split('.')[0] + ' IDR';
+    const money = extractMoney(payoutMatch[0]);
+    if (money) {
+      payout = money.formatted;
+      payoutValue = money.numeric;
+    }
   }
   
   // =========================
@@ -399,10 +421,22 @@ return $input.all().map(item => {
     roomType: finalRoomType,
     noOfRooms,
     channel,
+
+    currency,
+  
     nightlyRate,
+    nightlyRateValue,
+  
     totalPayment,
-    taxes,
-    otaFees
+    totalPaymentValue,
+  
+    taxes: '',
+  
+    otaFees,
+    otaFeesValue,
+  
+    payout,
+    payoutValue
   };
 
 });
