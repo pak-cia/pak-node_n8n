@@ -97,17 +97,19 @@ return $input.all().map(item => {
     noOfRooms = roomsMatch[1];
   }
   
-  // Extract room type safely from span
+  // Extract room type safely
   const roomTypeMatch = html.match(/lblRoomTypeData_lblMain[^>]*>([^<]+)</i);
   
   if (roomTypeMatch) {
     rawRoomType = cleanWhitespace(decodeEntities(roomTypeMatch[1]));
   
-    // Extract anything inside parentheses
-    const codeMatch = rawRoomType.match(/\(([^)]+)\)/i);
-    
-    if (codeMatch) {
-      unitCode = codeMatch[1].toUpperCase().trim();
+    // Get ALL parentheses groups
+    const allParens = rawRoomType.match(/\(([^)]+)\)/g);
+  
+    if (allParens && allParens.length > 0) {
+      // Take LAST parentheses group (real unit code)
+      const lastGroup = allParens[allParens.length - 1];
+      unitCode = lastGroup.replace(/[()]/g, '').toUpperCase().trim();
     }
   }
   
