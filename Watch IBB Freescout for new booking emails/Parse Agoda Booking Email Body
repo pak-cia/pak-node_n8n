@@ -85,49 +85,59 @@ return $input.all().map(item => {
   // =========================
   // Room Type + Units
   // =========================
-
-  const roomMatch = flatText.match(/Room\s*Type\s+(.+?)\s+\d+\s+Adults/i);
-  let rawRoom = roomMatch ? cleanWhitespace(roomMatch[1]) : '';
-
-  const roomsMatch = flatText.match(/No\.?\s*of\s*Rooms\s+(\d+)/i);
-  const noOfRooms = roomsMatch ? roomsMatch[1] : '1';
-
-  // Extract unit code inside brackets (Pom-JO etc)
-  const unitCodeMatch = rawRoom.match(/\(([^)]+)\)/);
-  const unitCode = unitCodeMatch ? unitCodeMatch[1] : '';
-
+  
+  let roomType = '';
+  let noOfRooms = '';
+  let unitCode = '';
+  let rawRoomType = '';
+  
+  // Extract number of rooms
+  const roomsMatch = html.match(/lblNumberRoomsData_lblMain[^>]*>(\d+)</i);
+  if (roomsMatch) {
+    noOfRooms = roomsMatch[1];
+  }
+  
+  // Extract room type safely from span
+  const roomTypeMatch = html.match(/lblRoomTypeData_lblMain[^>]*>([^<]+)</i);
+  
+  if (roomTypeMatch) {
+    rawRoomType = cleanWhitespace(decodeEntities(roomTypeMatch[1]));
+  
+    const codeMatch = rawRoomType.match(/\((Poms-[^)]+)\)/i);
+    if (codeMatch) {
+      unitCode = codeMatch[1];
+    }
+  }
+  
   // =========================
   // Property Mapping
   // =========================
-
+  
   let propertyId = '';
-
+  
   if (/Pom Pom/i.test(flatText)) propertyId = "POMS";
   if (/Middle House/i.test(flatText)) propertyId = "MH";
   if (/Ulu Hills/i.test(flatText)) propertyId = "ULU";
-
+  
   // =========================
   // Room Mapping
   // =========================
-
-  let roomType = rawRoom;
-
+  
   if (propertyId === "POMS" && unitCode) {
-
     if (/AHIP/i.test(unitCode)) roomType = "Living Room Suite";
     else if (/BG/i.test(unitCode)) roomType = "Patio Suite with Kitchen";
     else if (/CDEF/i.test(unitCode)) roomType = "Ground Floor Standard Suite";
     else if (/JO/i.test(unitCode)) roomType = "Balcony Suite";
     else if (/KLMN/i.test(unitCode)) roomType = "Second Floor Standard Suite";
+    else roomType = rawRoomType;
+  } else {
+    roomType = rawRoomType;
   }
 
   // =========================
   // Pricing
   // =========================
 
-// =========================
-// Pricing (Agoda Corrected)
-// =========================
   let currency = '';
   let nightlyRate = '';
   let nightlyRateValue = 0;
@@ -148,20 +158,34 @@ return $input.all().map(item => {
       currency = money.currency;
       totalPaymentValue = money.numeric;
       totalPayment = money.formatted;
-      payoutValue = money.numeric;
-      payout = money.formatted;
     }
   }
   
-  // ---- Commission (Agoda OTA fee)
-  const commissionMatch = flatText.match(/Commission\s+(IDR|USD|\$)\s?-?([\d,]+\.\d{2})/i);
+  // ---- Commission / Compensation (Agoda OTA fee)
+  
+  // 1️⃣ Try Commission row
+  let commissionMatch = html.match(
+    /Commission[\s\S]*?(IDR|USD|\$)[^0-9-]*-?([\d,]+\.\d{2})/i
+  );
+  
+  // 2️⃣ If not found, try Compensation row
+  if (!commissionMatch) {
+    commissionMatch = html.match(
+      /Compensation[\s\S]*?(IDR|USD|\$)[^0-9-]*-?([\d,]+\.\d{2})/i
+    );
+  }
   
   if (commissionMatch) {
-    const money = extractMoney(commissionMatch[0]);
-    if (money) {
-      otaFeesValue = Math.abs(money.numeric);
-      otaFees = otaFeesValue.toLocaleString('en-US') + ' ' + money.currency;
-    }
+    const currencyCode = commissionMatch[1] === '$'
+      ? 'USD'
+      : commissionMatch[1].toUpperCase();
+  
+    const numeric = Math.abs(
+      parseFloat(commissionMatch[2].replace(/,/g, ''))
+    );
+  
+    otaFeesValue = numeric;
+    otaFees = numeric.toLocaleString('en-US') + ' ' + currencyCode;
   }
   
   // ---- Tax on Commission
@@ -173,12 +197,40 @@ return $input.all().map(item => {
     }
   }
 
-  // ---- Calculate nightly rate from total
-  if (totalPaymentValue && noOfNights) {
-    nightlyRateValue = totalPaymentValue / parseInt(noOfNights);
-    nightlyRate = nightlyRateValue.toLocaleString('en-US') + ' ' + currency;
+  // ---- Net Rate (Actual Payout)
+  const netRateMatch = flatText.match(/Net rate.*?(IDR|USD|\$)\s?([\d,]+\.\d{2})/i);
+  
+  if (netRateMatch) {
+    const money = extractMoney(netRateMatch[0]);
+    if (money) {
+      payoutValue = money.numeric;
+      payout = money.formatted;
+    }
   }
 
+  // ---- Calculate nightly rate (per room per night)
+  if (totalPaymentValue && noOfNights && noOfRooms) {
+  
+    const nights = parseInt(noOfNights);
+    const rooms  = parseInt(noOfRooms);
+  
+    nightlyRateValue = totalPaymentValue / (nights * rooms);
+  
+    nightlyRate = nightlyRateValue.toLocaleString('en-US') + ' ' + currency;
+  
+  }
+
+  // =========================
+  // Occupied Nights (for occupancy tracking)
+  // =========================
+  
+  let occupiedNights = 0;
+  
+  if (noOfNights && noOfRooms) {
+    const nights = parseInt(noOfNights);
+    const rooms  = parseInt(noOfRooms);
+    occupiedNights = nights * rooms;
+  }
 
   // =========================
   // Final Output
@@ -192,6 +244,7 @@ return $input.all().map(item => {
     checkIn,
     checkOut,
     noOfNights,
+    occupiedNights,
     roomType,
     noOfRooms,
     channel,
