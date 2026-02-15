@@ -103,9 +103,11 @@ return $input.all().map(item => {
   if (roomTypeMatch) {
     rawRoomType = cleanWhitespace(decodeEntities(roomTypeMatch[1]));
   
-    const codeMatch = rawRoomType.match(/\((Poms-[^)]+)\)/i);
+    // Extract anything inside parentheses
+    const codeMatch = rawRoomType.match(/\(([^)]+)\)/i);
+    
     if (codeMatch) {
-      unitCode = codeMatch[1];
+      unitCode = codeMatch[1].toUpperCase().trim();
     }
   }
   
@@ -120,9 +122,10 @@ return $input.all().map(item => {
   if (/Ulu Hills/i.test(flatText)) propertyId = "ULU";
   
   // =========================
-  // Room Mapping
+  // Unit Mapping
   // =========================
-  
+
+  // Poms Units
   if (propertyId === "POMS" && unitCode) {
     if (/AHIP/i.test(unitCode)) roomType = "Living Room Suite";
     else if (/BG/i.test(unitCode)) roomType = "Patio Suite with Kitchen";
@@ -130,7 +133,48 @@ return $input.all().map(item => {
     else if (/JO/i.test(unitCode)) roomType = "Balcony Suite";
     else if (/KLMN/i.test(unitCode)) roomType = "Second Floor Standard Suite";
     else roomType = rawRoomType;
-  } else {
+  }
+
+  // MH Units
+  else if (propertyId === "MH" && unitCode) {
+  
+    if (["MH1", "MH2"].includes(unitCode)) {
+      roomType = "Balcony Suite";
+    }
+    else if (["MH3", "MH4"].includes(unitCode)) {
+      roomType = "Garden Suite";
+    }
+    else if (["MH5", "MH6"].includes(unitCode)) {
+      roomType = "Pool Room";
+    }
+    else if (unitCode === "MH-WHOLE") {
+      roomType = "Whole Villa";
+    }
+    else {
+      roomType = rawRoomType;
+    }
+  
+  }
+
+  // Ulu Units
+  else if (propertyId === "ULU" && unitCode) {
+  
+    if (["V1", "V2", "V4", "V5"].includes(unitCode)) {
+      roomType = "1 Bedroom Villa";
+    }
+    else if (unitCode === "V3") {
+      roomType = "2 Bedroom Villa";
+    }
+    else if (["V6", "V7"].includes(unitCode)) {
+      roomType = "3 Bedroom Villa";
+    }
+    else {
+      roomType = rawRoomType;
+    }
+  
+  }
+  
+  else {
     roomType = rawRoomType;
   }
 
@@ -163,15 +207,15 @@ return $input.all().map(item => {
   
   // ---- Commission / Compensation (Agoda OTA fee)
   
-  // 1️⃣ Try Commission row
+  // 1️⃣ Try Commission row (some templates use this)
   let commissionMatch = html.match(
-    /Commission[\s\S]*?(IDR|USD|\$)[^0-9-]*-?([\d,]+\.\d{2})/i
+    /Commission<\/span>[\s\S]*?(IDR|USD|\$)<\/span>\s*<span[^>]*>\s*-?([\d,]+\.\d{2})/i
   );
   
   // 2️⃣ If not found, try Compensation row
   if (!commissionMatch) {
     commissionMatch = html.match(
-      /Compensation[\s\S]*?(IDR|USD|\$)[^0-9-]*-?([\d,]+\.\d{2})/i
+      /compensation_lbl[\s\S]*?(IDR|USD|\$)<\/span>\s*<span[^>]*>\s*-?([\d,]+\.\d{2})/i
     );
   }
   
