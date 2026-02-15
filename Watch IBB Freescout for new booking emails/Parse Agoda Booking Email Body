@@ -179,6 +179,12 @@ return $input.all().map(item => {
   }
 
   // =========================
+  // Assigned Unit (direct from unitCode)
+  // =========================
+  
+  let assignedUnit = unitCode || '';
+
+  // =========================
   // Pricing
   // =========================
 
@@ -290,6 +296,7 @@ return $input.all().map(item => {
     noOfNights,
     occupiedNights,
     roomType,
+    assignedUnit,
     noOfRooms,
     channel,
     currency,
